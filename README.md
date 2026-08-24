@@ -21,7 +21,7 @@ conventions. Python 3.11+, **zero dependencies**, Windows / Linux / macOS.
 ![adjustment chain](https://img.shields.io/badge/deps-0-brightgreen)
 ![python](https://img.shields.io/badge/python-3.11%2B-blue)
 
-**Status:** v0.1 —alpha. The adjustment math is battle-tested inside a
+**Status:** v0.1.1 alpha, published on PyPI. The adjustment math is battle-tested inside a
 production research pipeline, but this standalone package is new: expect the
 CLI and schema to shift before v1.0.
 
@@ -80,7 +80,7 @@ claimed only where the theory allows it.
 ## Quick start
 
 ```bash
-# install from PyPI (once published)
+# install the published package from PyPI
 pip install pit-adjuster
 
 # or run without installing anything:

@@ -199,7 +199,7 @@ CI runs the full test suite on Ubuntu, Windows and macOS with Python 3.11 and
 
 - [Daniel, Sornette & Wohrmann (2008)](https://papers.ssrn.com/sol3/papers.cfm?abstract_id=1289222) —look-ahead benchmark bias, quantified
 - [Fonseca (2026)](https://econpapers.repec.org/paper/arxpapers/2607.04958.htm) —look-ahead-freedom as temporal non-interference (the verifiability boundary)
-- [Point-in-Time Backtesting: A Formal Bias Taxonomy](https://www.mdpi.com/2227-7390/14/12/2182) (Mathematics 2026, 14(12):2182)
+- [Point-in-Time Backtesting of Momentum-Trend Equity Strategies: A Formal Bias Taxonomy, ATR Trailing Stop Analysis, and Investor-Experience Metrics](https://www.mdpi.com/2227-7390/14/12/2182) (Mathematics 2026, 14(12):2182)
 - [Kelly et al., Scaling Point-in-Time Language Models](https://www.nber.org/papers/w35247) (NBER w35247)
 - [Look-Ahead-Bench](https://ar5iv.labs.arxiv.org/html/2601.13770) (arXiv:2601.13770) —measuring look-ahead bias in PIT LLMs
 

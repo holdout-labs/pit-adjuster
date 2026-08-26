@@ -18,6 +18,12 @@ rebuild prices so that **any day reads exactly what that day could have
 known** —plus drift detection for vendors that silently switch adjustment
 conventions. Python 3.11+, **zero dependencies**, Windows / Linux / macOS.
 
+**In plain words:** data vendors silently switch adjustment conventions —
+the 2019 prices you see today may not be the ones you saw yesterday, and
+nothing in the CSV changes shape. `pit-adjuster` detects that change and
+rebuilds history from a point-in-time corporate-action archive, so your
+backtest never quietly breaks because the data's meaning changed under you.
+
 ![adjustment chain](https://img.shields.io/badge/deps-0-brightgreen)
 ![python](https://img.shields.io/badge/python-3.11%2B-blue)
 
@@ -208,6 +214,8 @@ against self-deception in quantitative research:
 - [lesson-book](https://github.com/foolproof-labs/lesson-book) — tuition memory for traders
 - [lookahead-free](https://github.com/foolproof-labs/lookahead-free) — verifiable look-ahead-freedom checks
 - [ashare-data-immunity](https://github.com/foolproof-labs/ashare-data-immunity) — data immunity for A-share daily bars
+
+Sister org: [Metabolism Tools](https://github.com/metabolism-tools) — [`workspace-metabolism`](https://github.com/metabolism-tools/workspace-metabolism), policy-driven file lifecycle management for agentic workspaces.
 
 ## License
 

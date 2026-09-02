@@ -95,6 +95,10 @@ pip install pit-adjuster
 # try it on synthetic data (builds a fake qfq history + action archive,
 # rebuilds to hfq, runs invert-check and drift-check)
 python examples/demo.py
+
+# real-world case: a one-day ×100 price-scale corruption (21 symbols) caught
+# by the full-window drift default — tail-only sampling misses it
+python examples/case_scale_corruption.py
 ```
 
 Rebuild your own history:

@@ -101,6 +101,12 @@ python examples/demo.py
 python examples/case_scale_corruption.py
 ```
 
+Real-world case write-up:
+[docs/case-study-daily-bar-scale-corruption.md](docs/case-study-daily-bar-scale-corruption.md)
+— a one-day ×100 OHLC corruption caught by the full-window drift default,
+with the fix pattern (detect → correlate by source → repair with provenance →
+fix parser + regression test → re-verify).
+
 Rebuild your own history:
 
 ```bash

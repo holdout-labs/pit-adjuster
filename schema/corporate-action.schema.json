@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://github.com/metabolism-tools/pit-adjuster/schema/corporate-action.schema.json",
+  "$id": "https://github.com/holdout-labs/pit-adjuster/schema/corporate-action.schema.json",
   "title": "CorporateAction",
   "description": "A point-in-time corporate-action record consumed by pit-adjuster. Each event carries an ex-date and an adjustment factor; availability is recorded for auditability.",
   "type": "object",

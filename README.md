@@ -99,6 +99,10 @@ python examples/demo.py
 # real-world case: a one-day ×100 price-scale corruption (21 symbols) caught
 # by the full-window drift default — tail-only sampling misses it
 python examples/case_scale_corruption.py
+
+# companion: a missing corporate-action event (constant ~31% pre-event
+# deviation) — same default catches it, tail-only misses it again
+python examples/case_missing_event.py
 ```
 
 Real-world case write-up:

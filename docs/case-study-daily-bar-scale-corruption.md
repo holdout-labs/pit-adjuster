@@ -84,3 +84,24 @@ as a constant ~31% deviation on every bar before the event) — see
 `examples/` for the scale-corruption reproduction and the tool's
 `compare_raw_closes`/`compare_snapshots` API for building the equivalent
 guards in your own pipeline.
+
+## Companion reproduction: the missing-event signature
+
+The missing-event failure has a different fingerprint from the scale
+corruption, and the same default catches both:
+
+```bash
+python examples/case_missing_event.py
+# → tail-only: MISSED (vacuous) / full-window: FIRED (0.3155)
+# → signature: constant 0.3155 on 9 pre-event bars
+```
+
+The scenario: the vendor's qfq history already carries a real ex-date
+(factor 0.6845) but the point-in-time archive knows nothing about it, so
+every **pre-event** bar inverts to `raw × 0.6845` instead of `raw` — a
+constant `1 − 0.6845 = 0.3155` deviation across the whole pre-event
+segment, vs. the single-bar ~99× spike of the scale-corruption case. Read
+the signatures, not just the numbers: **a single-bar spike is a price
+corruption; a constant pre-event block is a missing event.** Tail-only
+sampling misses both whenever the divergence sits before the trailing
+window.

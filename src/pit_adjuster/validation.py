@@ -75,7 +75,7 @@ def compare_raw_closes(
     bars: list[dict[str, Any]],
     live_closes: dict[str, float],
     *,
-    sample_days: int = 5,
+    sample_days: int | None = None,
 ) -> dict[str, Any]:
     """Compare inverted raw closes against live raw closes.
 
@@ -84,10 +84,20 @@ def compare_raw_closes(
     is the **static forward-adjustment detector**: if a vendor silently
     swaps adjustment conventions, inverted raws stop matching live raws and
     this check fires.
+
+    ``sample_days`` limits the comparison to the trailing N bars (a
+    performance shortcut); ``None`` (default) compares the whole series.
+
+    .. note:: 2026-09-02 (trial-run regression): the previous default of
+       ``sample_days=5`` was vacuous whenever the most recent ex-date lay
+       more than a few bars behind the tail — after an ex-date, qfq prices
+       equal raw prices, so a trailing-only window always reports 0.0 and
+       the drift (which only shows on bars *before* an ex-date) is missed.
+       The default is now the full series.
     """
     dated = [bar for bar in bars if bar.get("date") and bar.get("raw_close")]
     dated.sort(key=lambda bar: str(bar["date"]))
-    sampled = dated[-max(1, sample_days):]
+    sampled = dated if sample_days is None else dated[-max(1, sample_days):]
     rows: list[dict[str, Any]] = []
     for bar in sampled:
         day = str(bar["date"])[:10]

@@ -53,7 +53,13 @@ def build_parser() -> argparse.ArgumentParser:
     drift = sub.add_parser("drift-check", help="static forward-adjustment detection vs live closes")
     _add_common_inputs(drift)
     drift.add_argument("--live", required=True, help="live raw closes JSON (date -> close)")
-    drift.add_argument("--sample-days", type=int, default=5)
+    drift.add_argument(
+        "--sample-days",
+        type=int,
+        default=None,
+        help="compare only the trailing N bars (default: whole series — "
+        "trailing-only windows miss drift whose ex-date lies behind the tail)",
+    )
 
     snap = sub.add_parser("snapshot-equivalence", help="before/after equivalence of two rebuilds")
     snap.add_argument("--before", required=True, help="rebuilt bars JSON (old pipeline)")

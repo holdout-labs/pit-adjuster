@@ -82,6 +82,26 @@ def test_compare_raw_closes_exact_match() -> None:
     assert report["worst_deviation"] < 1e-6
 
 
+def test_compare_raw_closes_default_full_window_catches_old_event() -> None:
+    """Regression 2026-09-02: an ex-date older than the trailing window makes
+    a tail-only compare vacuous (always 0.0). The default (whole series)
+    must still catch the vendor divergence that shows only before ex-date."""
+    actions = [_action("2026-06-15", 0.95)]
+    days = [f"2026-06-{i + 1:02d}" for i in range(20)]  # 06-01..06-20
+    raw = {day: 100.0 + i for i, day in enumerate(days)}
+    # leak: vendor pre-ex bars were NOT adjusted (raw mislabeled as qfq)
+    leak_bars = [_bar(day, raw[day]) for day in days]
+    rebuilt_leak, _ = rebuild_bars(leak_bars, actions, as_of_date="2026-08-11")
+
+    tail_only = compare_raw_closes(rebuilt_leak, raw, sample_days=5)
+    assert tail_only["worst_deviation"] == 0.0  # vacuous: all sampled bars are post-ex
+
+    full = compare_raw_closes(rebuilt_leak, raw)  # default = whole series
+    assert full["checked"] == 20
+    assert full["worst_deviation"] is not None
+    assert full["worst_deviation"] > 0.01  # pre-ex inverted = raw/0.95 vs raw
+
+
 def test_snapshot_equivalence_identical() -> None:
     actions = [_action("2026-06-15", 0.95)]
     qfq_bars = [_bar("2026-06-12", 100.0 * 0.95), _bar("2026-06-15", 99.0)]

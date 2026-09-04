@@ -11,7 +11,7 @@ Zero dependencies. Python 3.11+.
 from .chain import build_multipliers, events_from_actions, rebuild_bars
 from .validation import compare_raw_closes, compare_snapshots, validate_inversion
 
-__version__ = "0.1.1"
+__version__ = "0.1.2"
 
 __all__ = [
     "build_multipliers",

@@ -28,7 +28,7 @@ Windows / Linux / macOS。
 ![adjustment chain](https://img.shields.io/badge/deps-0-brightgreen)
 ![python](https://img.shields.io/badge/python-3.11%2B-blue)
 
-**状态：** v0.1.1 alpha，已发布到 PyPI。复权计算逻辑已在生产研究管线中
+**状态：** v0.1.3 alpha，已发布到 PyPI。复权计算逻辑已在生产研究管线中
 经过实战检验，但这个独立包尚属全新：在 v1.0 之前，CLI 和 schema 预计
 会有所调整。
 

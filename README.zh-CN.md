@@ -5,6 +5,8 @@
 ![CI](https://github.com/holdout-labs/pit-adjuster/actions/workflows/ci.yml/badge.svg)
 ![License](https://img.shields.io/badge/license-MIT-blue)
 
+> 收录于 [awesome-quant](https://github.com/wilsonfreitas/awesome-quant) —— 量化库精选清单（Market Data & Data Sources 板块）。
+
 ## 中文说明
 
 `pit-adjuster` 面向 A 股等股票市场的历史行情复权和公司行为数据处理。

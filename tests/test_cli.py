@@ -109,3 +109,64 @@ def test_cli_snapshot_equivalence(fixtures, capsys) -> None:
         ]
     )
     assert code == 0
+
+
+def _write_closes(tmp_path, name, closes) -> str:
+    path = tmp_path / name
+    _write(path, closes)
+    return str(path)
+
+
+def test_cli_forward_check_clean_event_only(tmp_path, fixtures, capsys) -> None:
+    """A consistent vendor forward chain deviates from raw only at the
+    ex-date (within the event window) -> clean_event_only, exit 0."""
+    raw = _write_closes(
+        tmp_path, "raw.json",
+        {"2026-06-12": 100.0, "2026-06-15": 95.0, "2026-06-16": 96.0,
+         "2026-06-17": 97.0, "2026-06-18": 98.0},
+    )
+    fwd = _write_closes(
+        tmp_path, "fwd.json",
+        {"2026-06-12": 95.0, "2026-06-15": 95.0, "2026-06-16": 96.0,
+         "2026-06-17": 97.0, "2026-06-18": 98.0},
+    )
+    code = main(
+        [
+            "forward-check",
+            "--raw", raw,
+            "--forward", fwd,
+            "--actions", fixtures["actions"],
+        ]
+    )
+    assert code == 0
+    out = capsys.readouterr().out
+    assert "clean_event_only" in out
+    assert "unexplained_days" in out
+
+
+def test_cli_forward_check_broken_drift(tmp_path, fixtures, capsys) -> None:
+    """A vendor chain that drifts 0.5% on a day far outside the event window
+    is unexplained; with limit 0 that is broken -> exit 1."""
+    raw = _write_closes(
+        tmp_path, "raw.json",
+        {"2026-06-12": 100.0, "2026-06-15": 95.0, "2026-06-16": 96.0,
+         "2026-06-17": 97.0, "2026-06-18": 98.0, "2026-06-19": 99.0},
+    )
+    fwd = _write_closes(
+        tmp_path, "fwd.json",
+        {"2026-06-12": 95.0, "2026-06-15": 95.0, "2026-06-16": 96.0,
+         "2026-06-17": 97.0, "2026-06-18": 98.0, "2026-06-19": round(99.0 * 1.005, 6)},
+    )
+    code = main(
+        [
+            "forward-check",
+            "--raw", raw,
+            "--forward", fwd,
+            "--actions", fixtures["actions"],
+            "--unexplained-limit", "0",
+        ]
+    )
+    assert code == 1
+    out = capsys.readouterr().out
+    assert '"verdict": "broken"' in out
+    assert '"unexplained_days": 1' in out

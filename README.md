@@ -27,7 +27,7 @@ backtest never quietly breaks because the data's meaning changed under you.
 ![adjustment chain](https://img.shields.io/badge/deps-0-brightgreen)
 ![python](https://img.shields.io/badge/python-3.11%2B-blue)
 
-**Status:** v0.1.3 alpha, published on PyPI. The adjustment math is battle-tested inside a
+**Status:** v0.1.4 alpha, published on PyPI. The adjustment math is battle-tested inside a
 production research pipeline, but this standalone package is new: expect the
 CLI and schema to shift before v1.0.
 
@@ -103,13 +103,23 @@ python examples/case_scale_corruption.py
 # companion: a missing corporate-action event (constant ~31% pre-event
 # deviation) — same default catches it, tail-only misses it again
 python examples/case_missing_event.py
+
+# real-world case: a vendor forward (qfq) chain that drifts on
+# corporate-action-dense codes (6 of 8 sampled codes BROKEN in production,
+# 32-424 unexplained drift days) — clean / broken / missing-event verdicts
+python examples/case_forward_drift.py
 ```
 
-Real-world case write-up:
-[docs/case-study-daily-bar-scale-corruption.md](docs/case-study-daily-bar-scale-corruption.md)
-— a one-day ×100 OHLC corruption caught by the full-window drift default,
-with the fix pattern (detect → correlate by source → repair with provenance →
-fix parser + regression test → re-verify).
+Real-world case write-ups:
+
+- [docs/case-study-daily-bar-scale-corruption.md](docs/case-study-daily-bar-scale-corruption.md)
+  — a one-day ×100 OHLC corruption caught by the full-window drift default,
+  with the fix pattern (detect → correlate by source → repair with
+  provenance → fix parser + regression test → re-verify).
+- [docs/case-study-vendor-forward-drift.md](docs/case-study-vendor-forward-drift.md)
+  — a vendored forward chain drifting on event-dense codes (spurious day
+  returns on days with no corporate action), caught by `padj forward-check`
+  and rebuilt deterministically from the corporate-action chain.
 
 Rebuild your own history:
 
@@ -121,6 +131,10 @@ padj rebuild \
 padj invert-check --bars hfq.json --actions actions.json --as-of 2026-08-11
 padj drift-check --bars hfq.json --actions actions.json \
   --as-of 2026-08-11 --live live_closes.json
+
+# validate a vendor forward-adjusted series against the CA archive:
+padj forward-check --raw raw_closes.json --forward vendor_qfq.json \
+  --actions actions.json
 ```
 
 `padj rebuild` is the workhorse: it inverts the vendor qfq chain back to raw
@@ -136,6 +150,7 @@ prices.
 | `rebuild` | Rebuild bars to fixed-basis hfq: `open/high/low/close` adjusted, `raw_open/raw_close` nominal, `adj_factor` cumulative multiplier, volume normalized to shares |
 | `invert-check` | Ex-date continuity sanity check: is `raw_{ex-1} × factor_e ≥ raw_ex`? Informational —real ex-dates carry overnight returns, so violations can be false positives |
 | `drift-check` | **Static forward-adjustment detection.** Compares inverted raw closes against live raw closes; divergence above tolerance is authoritative —a vendor chain that no longer matches the archive |
+| `forward-check` | **Vendor forward-chain validation.** Reconciles a vendor forward-adjusted (qfq) series against the deterministic day returns implied by raw closes and the CA archive. Deviations on days with no corporate action are unexplained; more than `--unexplained-limit` of them ⇒ `broken` (vendor forward-chain drift — do not trust the series). A CA archive that *missed* an event the vendor applied surfaces as a single unexplained jump (`suspicious`). Read-only; exits non-zero on `suspicious`/`broken` |
 | `snapshot-equivalence` | Compare two rebuilt outputs (e.g. old and new pipeline versions) date-by-date within tolerance —the "did anything change?" gate |
 | `version` | Print version |
 
@@ -194,6 +209,9 @@ shares. Both are parameterizable —see `--volume-to-shares` and the
 - `drift-check` —inverted raws vs live raws (authoritative divergence
   detection; this is the "static forward-adjustment detector" —if a vendor
   swaps conventions, this fires)
+- `forward-check` —vendor forward series vs raw × CA-archive day returns
+  (catches vendor forward chains that drift on event-dense codes, and CA
+  archives missing an event)
 - `snapshot-equivalence` —before/after equivalence of two rebuilds, the
   reproducibility gate for pipeline migrations
 

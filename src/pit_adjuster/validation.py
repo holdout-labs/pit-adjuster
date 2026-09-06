@@ -10,6 +10,7 @@ heuristic guards, stated explicitly per check.
 from __future__ import annotations
 
 import bisect
+import datetime
 import math
 from typing import Any
 
@@ -186,3 +187,131 @@ def compare_snapshots(
         "differences": differences,
         "missing": missing,
     }
+
+
+def check_forward_series(
+    raw_closes: dict[str, float],
+    forward_closes: dict[str, float],
+    event_dates: list[str],
+    *,
+    tolerance: float = 0.003,
+    event_window_days: int = 2,
+    unexplained_limit: int = 2,
+) -> dict[str, Any]:
+    """Reconcile a vendor forward-adjusted (qfq) close series against the
+    deterministic day returns implied by raw closes and the corporate-action
+    archive (``ex_date`` list).
+
+    Forward adjustment is *supposed* to differ from raw prices only on
+    ex-dates: an adjustment is a one-day re-basing, so any fixed basis
+    (hfq/qfq/current-vintage forward) has identical day returns to raw on
+    days with no corporate action.  When a vendor computes its forward chain
+    with a compounding or rolling bug, the series shows spurious day returns
+    on days with no corporate action at all — the exact failure observed in
+    2026-09 on dividend-dense A-share codes (6 of 8 sampled codes BROKEN,
+    32–424 unexplained drift days of 837, ±0.3–2% per day, spanning years).
+
+    Every consecutive pair where both series have both days is checked:
+    ``|forward_day_return - raw_day_return| > tolerance`` marks a deviant
+    day.  Deviant days inside ``event_window_days`` calendar days of an
+    archive ``ex_date`` are explainable (vendors may lag or lead an ex-date
+    by a day or two) and never counted.  The rest are unexplained.  Verdict:
+
+    - ``clean``            — no day-return deviation above tolerance;
+    - ``clean_event_only`` — deviations only on event-window days (a vendor
+      that applies exactly the archive factors, modulo the 1-day caliber);
+    - ``suspicious``       — 1..``unexplained_limit`` unexplained days (an
+      archive *missing* an event that the vendor applied surfaces here as a
+      single unexplained jump);
+    - ``broken``           — more than ``unexplained_limit`` unexplained
+      days (vendor forward chain drift — do not trust the series).
+
+    Honest boundaries: a *raw* series mislabeled as forward also passes
+    (its day returns equal raw returns everywhere; level checks belong to
+    ``drift-check`` vs live closes), and the reverse case — an archive event
+    the vendor never applied — shows up as an event-window deviation at
+    worst.  The check is convention-independent and reads only the
+    value-independent fragment (ex-date positions), exactly where this
+    package claims verifiability.
+    """
+    def _closes(source: dict[str, float]) -> dict[str, float]:
+        out: dict[str, float] = {}
+        for day, value in source.items():
+            try:
+                value = float(value)
+            except (TypeError, ValueError):
+                continue
+            day = str(day)[:10]
+            if day and math.isfinite(value) and value > 0:
+                out[day] = value
+        return out
+
+    raw = _closes(raw_closes)
+    forward = _closes(forward_closes)
+    event_dates = sorted({str(day)[:10] for day in event_dates if str(day)[:10]})
+    dates = sorted(set(raw) & set(forward))
+
+    deviant: list[dict[str, Any]] = []
+    unexplained: list[dict[str, Any]] = []
+    explainable = 0
+    for previous, day in zip(dates, dates[1:]):
+        raw_prev, raw_day = raw[previous], raw[day]
+        fwd_prev, fwd_day = forward[previous], forward[day]
+        if not (math.isfinite(raw_prev) and math.isfinite(raw_day)):
+            continue
+        if not (math.isfinite(fwd_prev) and math.isfinite(fwd_day)):
+            continue
+        raw_return = raw_day / raw_prev - 1.0
+        forward_return = fwd_day / fwd_prev - 1.0
+        deviation = abs(forward_return - raw_return)
+        if deviation <= tolerance:
+            continue
+        row = {
+            "date": day,
+            "forward_return": round(forward_return, 6),
+            "raw_return": round(raw_return, 6),
+            "deviation": round(deviation, 6),
+        }
+        deviant.append(row)
+        if _near_event(day, event_dates, event_window_days):
+            explainable += 1
+        else:
+            unexplained.append(row)
+
+    verdict = "clean"
+    if deviant:
+        verdict = "clean_event_only"
+    if unexplained:
+        verdict = "suspicious" if len(unexplained) <= unexplained_limit else "broken"
+    return {
+        "verdict": verdict,
+        "raw_days": len(raw),
+        "forward_days": len(forward),
+        "paired_days": len(dates),
+        "checked": max(0, len(dates) - 1),
+        "event_days": len(event_dates),
+        "deviant_days": len(deviant),
+        "explainable_days": explainable,
+        "unexplained_days": len(unexplained),
+        "unexplained": unexplained,
+        "deviant": deviant,
+        "tolerance": tolerance,
+        "event_window_days": event_window_days,
+        "unexplained_limit": unexplained_limit,
+    }
+
+
+def _near_event(day: str, event_dates: list[str], window_days: int) -> bool:
+    """Whether ``day`` lies within ``window_days`` calendar days of an ex-date."""
+    try:
+        day_date = datetime.date.fromisoformat(day)
+    except ValueError:
+        return False
+    for event in event_dates:
+        try:
+            event_date = datetime.date.fromisoformat(event)
+        except ValueError:
+            continue
+        if abs((day_date - event_date).days) <= window_days:
+            return True
+    return False

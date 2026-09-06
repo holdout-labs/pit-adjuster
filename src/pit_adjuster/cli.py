@@ -7,6 +7,8 @@ Subcommands:
 - ``drift-check``            static forward-adjustment detection vs live closes
 - ``forward-check``          vendor forward series vs CA archive (day-return
                              reconciliation, unexplained-day verdict)
+- ``watch``                  cross-run history-rewrite detection (stateful
+                             watchdog: last-state tail vs current tail)
 - ``snapshot-equivalence``   before/after equivalence of two rebuilds
 - ``version``                print version
 """
@@ -14,8 +16,10 @@ Subcommands:
 from __future__ import annotations
 
 import argparse
+import datetime
 import json
 import sys
+from pathlib import Path
 from typing import Any
 
 from . import __version__
@@ -25,6 +29,8 @@ from .validation import (
     check_forward_series,
     compare_raw_closes,
     compare_snapshots,
+    detect_rewrites,
+    tail_snapshot,
     validate_inversion,
 )
 
@@ -96,6 +102,25 @@ def build_parser() -> argparse.ArgumentParser:
                          help="unexplained days above this -> broken")
     forward.add_argument("--out", default=None,
                          help="output path (JSON); default: stdout summary")
+
+    watch = sub.add_parser(
+        "watch",
+        help=(
+            "cross-run history-rewrite detection (stateful watchdog): "
+            "compare this run's vendor close tail against the last run's "
+            "state; changed days on/after the newest ex-date are silent "
+            "history rewrites (FIRED)"
+        ),
+    )
+    _add_common_inputs(watch)
+    watch.add_argument("--state-dir", required=True,
+                       help="directory holding watch_state.json (created if missing)")
+    watch.add_argument("--code", default="default",
+                       help="state key when one state file watches many codes")
+    watch.add_argument("--tail-bars", type=int, default=20,
+                       help="trailing bars fingerprinted per run (default 20)")
+    watch.add_argument("--out", default=None,
+                       help="output path (JSON); default: stdout summary")
 
     snap = sub.add_parser("snapshot-equivalence", help="before/after equivalence of two rebuilds")
     snap.add_argument("--before", required=True, help="rebuilt bars JSON (old pipeline)")
@@ -175,6 +200,9 @@ def main(argv: list[str] | None = None) -> int:
             _print_summary("forward-check", report)
         return 0 if report["verdict"] in ("clean", "clean_event_only") else 1
 
+    if args.command == "watch":
+        return cmd_watch(args)
+
     if args.command == "snapshot-equivalence":
         before = load_bars(args.before)
         after = load_bars(args.after)
@@ -220,6 +248,88 @@ def _load_closes(path: str) -> dict[str, float]:
             f"closes source contains no {{date, close}} rows: {path}"
         )
     return closes
+
+
+WATCH_STATE_SCHEMA_VERSION = "pit_adjuster.watch_state.v1"
+WATCH_RECORD_SCHEMA_VERSION = "pit_adjuster.watch_record.v1"
+WATCH_STATE_FILENAME = "watch_state.json"
+
+
+def cmd_watch(args: argparse.Namespace) -> int:
+    """Cross-run history-rewrite detection for one code (stateful watchdog).
+
+    Watches the *vendor series as ingested* (the bars you feed to
+    ``padj rebuild`` / ``drift-check``).  Each run fingerprints the trailing
+    bars' closes into ``<state-dir>/watch_state.json`` under ``--code``;
+    days whose close changed since the previous run, on or after the newest
+    archive ex-date, are silent history rewrites -> FIRED (exit 1).  Days
+    before the newest ex-date are exempt — a new ex-date legitimately
+    re-anchors forward-adjusted history; that segment is the job of
+    ``drift-check`` against live raw closes.  Incremental semantics: if the
+    rewritten value persists, the next run is silent again.
+    """
+    bars = load_bars(args.bars)
+    actions = load_actions(args.actions)
+    events = events_from_actions(actions, as_of_date=args.as_of)
+    newest_ex = events[-1]["ex_date"] if events else None
+    tail = tail_snapshot(bars, limit=args.tail_bars)
+
+    state_dir = Path(args.state_dir)
+    state_dir.mkdir(parents=True, exist_ok=True)
+    state_path = state_dir / WATCH_STATE_FILENAME
+    state: dict[str, Any] = {}
+    if state_path.exists():
+        try:
+            state = json.loads(state_path.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, OSError):
+            state = {}
+    if not isinstance(state, dict):
+        state = {}
+    codes = state.get("codes") if isinstance(state.get("codes"), dict) else {}
+    previous = codes.get(args.code)
+    previous_tail = previous.get("tail") if isinstance(previous, dict) else None
+
+    rewrites = detect_rewrites(previous_tail, tail, newest_ex=newest_ex)
+    record: dict[str, Any] = {
+        "schema_version": WATCH_RECORD_SCHEMA_VERSION,
+        "code": args.code,
+        "as_of": args.as_of,
+        "checked_at": datetime.datetime.now().astimezone().isoformat(
+            timespec="seconds"
+        ),
+        "tail_days": len(tail),
+        "newest_ex": newest_ex,
+        "had_baseline": isinstance(previous_tail, dict) and bool(previous_tail),
+        "rewrites": rewrites,
+        "rewritten_days": len(rewrites),
+        "fired": bool(rewrites),
+        "note": (
+            "fired: close changed on a day on/after the newest archive "
+            "ex-date with no new corporate action to explain it — history "
+            "was silently rewritten. Days before newest_ex are exempt (a "
+            "new ex-date legitimately re-anchors forward history); that "
+            "segment is covered by drift-check vs live raw closes."
+        ),
+    }
+    codes[args.code] = {
+        "tail": tail,
+        "newest_ex": newest_ex,
+        "run_as_of": args.as_of,
+    }
+    state["schema_version"] = WATCH_STATE_SCHEMA_VERSION
+    state["codes"] = codes
+    write_json(state_path, state)
+
+    if args.out:
+        write_json(args.out, record)
+        print(
+            f"watch[{args.code}]: {'FIRED' if record['fired'] else 'ok'} "
+            f"({record['rewritten_days']} rewritten days, "
+            f"newest_ex={newest_ex}) -> {args.out}"
+        )
+    else:
+        _print_summary(f"watch[{args.code}]", record)
+    return 1 if record["fired"] else 0
 
 
 if __name__ == "__main__":

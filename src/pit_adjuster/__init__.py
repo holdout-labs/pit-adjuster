@@ -13,18 +13,22 @@ from .validation import (
     check_forward_series,
     compare_raw_closes,
     compare_snapshots,
+    detect_rewrites,
+    tail_snapshot,
     validate_inversion,
 )
 
-__version__ = "0.1.4"
+__version__ = "0.1.5"
 
 __all__ = [
     "build_multipliers",
     "check_forward_series",
     "compare_raw_closes",
     "compare_snapshots",
+    "detect_rewrites",
     "events_from_actions",
     "rebuild_bars",
+    "tail_snapshot",
     "validate_inversion",
 ]
 

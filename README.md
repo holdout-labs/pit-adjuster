@@ -27,7 +27,7 @@ backtest never quietly breaks because the data's meaning changed under you.
 ![adjustment chain](https://img.shields.io/badge/deps-0-brightgreen)
 ![python](https://img.shields.io/badge/python-3.11%2B-blue)
 
-**Status:** v0.1.4 alpha, published on PyPI. The adjustment math is battle-tested inside a
+**Status:** v0.1.5 alpha, published on PyPI. The adjustment math is battle-tested inside a
 production research pipeline, but this standalone package is new: expect the
 CLI and schema to shift before v1.0.
 
@@ -108,6 +108,10 @@ python examples/case_missing_event.py
 # corporate-action-dense codes (6 of 8 sampled codes BROKEN in production,
 # 32-424 unexplained drift days) — clean / broken / missing-event verdicts
 python examples/case_forward_drift.py
+
+# real-world case: silent history rewrites between runs (caught once, then
+# quiet; legitimate ex-date re-anchors are exempt) — six-run replay
+python examples/case_history_rewrite.py
 ```
 
 Real-world case write-ups:
@@ -120,6 +124,10 @@ Real-world case write-ups:
   — a vendored forward chain drifting on event-dense codes (spurious day
   returns on days with no corporate action), caught by `padj forward-check`
   and rebuilt deterministically from the corporate-action chain.
+- [docs/case-study-cross-run-history-rewrite.md](docs/case-study-cross-run-history-rewrite.md)
+  — silent history rewrites between runs (post-ex segment changes with no
+  new event), caught once by the stateful `padj watch`, with legitimate
+  ex-date re-anchors exempt.
 
 Rebuild your own history:
 
@@ -135,6 +143,10 @@ padj drift-check --bars hfq.json --actions actions.json \
 # validate a vendor forward-adjusted series against the CA archive:
 padj forward-check --raw raw_closes.json --forward vendor_qfq.json \
   --actions actions.json
+
+# run the cross-run rewrite watchdog (state lives in --state-dir):
+padj watch --bars vendor_600000.json --actions actions.json \
+  --as-of 2026-08-11 --state-dir ./watch-state --code 600000
 ```
 
 `padj rebuild` is the workhorse: it inverts the vendor qfq chain back to raw
@@ -151,6 +163,7 @@ prices.
 | `invert-check` | Ex-date continuity sanity check: is `raw_{ex-1} × factor_e ≥ raw_ex`? Informational —real ex-dates carry overnight returns, so violations can be false positives |
 | `drift-check` | **Static forward-adjustment detection.** Compares inverted raw closes against live raw closes; divergence above tolerance is authoritative —a vendor chain that no longer matches the archive |
 | `forward-check` | **Vendor forward-chain validation.** Reconciles a vendor forward-adjusted (qfq) series against the deterministic day returns implied by raw closes and the CA archive. Deviations on days with no corporate action are unexplained; more than `--unexplained-limit` of them ⇒ `broken` (vendor forward-chain drift — do not trust the series). A CA archive that *missed* an event the vendor applied surfaces as a single unexplained jump (`suspicious`). Read-only; exits non-zero on `suspicious`/`broken` |
+| `watch` | **Cross-run history-rewrite detection (stateful).** Fingerprints the trailing vendor closes into `<state-dir>/watch_state.json`; a day whose close changed since the previous run, on or after the newest archive ex-date, is a silent history rewrite → FIRED (exit 1). Pre-ex-date changes are exempt (a new ex-date legitimately re-anchors forward history — that segment is `drift-check`'s job). Incremental: a persisting rewritten value does not re-fire on the next run |
 | `snapshot-equivalence` | Compare two rebuilt outputs (e.g. old and new pipeline versions) date-by-date within tolerance —the "did anything change?" gate |
 | `version` | Print version |
 
@@ -212,6 +225,8 @@ shares. Both are parameterizable —see `--volume-to-shares` and the
 - `forward-check` —vendor forward series vs raw × CA-archive day returns
   (catches vendor forward chains that drift on event-dense codes, and CA
   archives missing an event)
+- `watch` —cross-run rewrite detection on the post-newest-ex segment
+  (stateful, incremental: fires once per actual history change)
 - `snapshot-equivalence` —before/after equivalence of two rebuilds, the
   reproducibility gate for pipeline migrations
 

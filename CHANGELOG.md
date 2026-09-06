@@ -1,5 +1,21 @@
 # Changelog
 
+## [0.1.5] - 2026-09-06
+- feat: `padj watch` — stateful cross-run history-rewrite detection.
+  Each run fingerprints the trailing vendor closes into
+  `<state-dir>/watch_state.json` (keyed by `--code`); a day whose close
+  changed since the previous run, on or after the newest archive ex-date,
+  is a silent history rewrite -> FIRED (exit 1).  Days before the newest
+  ex-date are exempt — a new ex-date legitimately re-anchors forward
+  history (that segment is `drift-check`'s job).  Incremental-alert
+  semantics: a persisting rewritten value does not re-fire on the next
+  run.  New APIs `tail_snapshot` and `detect_rewrites`.
+- docs: real-world case study
+  `docs/case-study-cross-run-history-rewrite.md` + offline reproduction
+  `examples/case_history_rewrite.py` (six-run replay: baseline -> unchanged
+  -> silent rewrite FIRED -> persists (silent) -> second rewrite FIRED ->
+  new ex-date re-anchor (exempt), self-checking exit code).
+
 ## [0.1.4] - 2026-09-06
 - feat: `padj forward-check` — validate a vendor forward-adjusted (qfq)
   series against the deterministic day returns implied by raw closes and

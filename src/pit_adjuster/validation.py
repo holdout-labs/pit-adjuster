@@ -315,3 +315,80 @@ def _near_event(day: str, event_dates: list[str], window_days: int) -> bool:
         if abs((day_date - event_date).days) <= window_days:
             return True
     return False
+
+
+def tail_snapshot(
+    bars: list[dict[str, Any]],
+    *,
+    limit: int = 20,
+    round_digits: int = 4,
+) -> dict[str, float]:
+    """Fingerprint of the trailing bars' closes: ``{date: close}``.
+
+    The cross-run rewrite detector compares this run's tail against the tail
+    recorded in the previous run.  Closes are rounded so that harmless
+    float noise never masquerades as a rewrite; ``limit`` bounds the state a
+    long-lived watch keeps per code.
+    """
+    out: dict[str, float] = {}
+    for bar in (bars or [])[-max(1, int(limit)):]:
+        day = str(bar.get("date") or "")[:10]
+        try:
+            value = round(float(bar.get("close")), round_digits)
+        except (TypeError, ValueError):
+            continue
+        if day and math.isfinite(value):
+            out[day] = value
+    return out
+
+
+def detect_rewrites(
+    previous_tail: dict[str, float] | None,
+    current_tail: dict[str, float],
+    *,
+    newest_ex: str | None = None,
+) -> list[dict[str, Any]]:
+    """Cross-run history-rewrite detection (the stateful watchdog check).
+
+    Compares the current tail snapshot against the previous run's snapshot
+    and reports days whose close changed *without a corporate action to
+    explain it*:
+
+    - only days present in **both** snapshots are compared (a new trading
+      day at the tail is normal growth, not a rewrite);
+    - days **before** the newest archive ex-date (``newest_ex``) are exempt:
+      a new ex-date re-anchors the whole forward-adjusted history, so pre-ex
+      values legitimately change between runs — this is the segment the
+      ``drift-check`` vs live raw closes covers instead;
+    - a changed day **on or after** ``newest_ex`` means history was silently
+      rewritten (after the newest ex-date, forward prices equal raw prices,
+      and nothing legitimate can change them between runs).
+
+    Incremental-alert semantics: the check fires on the *delta* between two
+    runs.  If the rewritten value persists, the next run reports nothing
+    again — no repeat alert until history changes once more.
+
+    Returns a list of ``{"date", "previous_close", "current_close"}`` rows
+    (sorted); an empty list means no silent rewrite.
+    """
+    if not isinstance(previous_tail, dict) or not previous_tail:
+        return []
+    rows: list[dict[str, Any]] = []
+    for day in sorted(set(previous_tail) & set(current_tail)):
+        if newest_ex is not None and day < newest_ex:
+            continue  # a new ex-date legitimately re-anchors pre-ex history
+        previous_close = previous_tail[day]
+        current_close = current_tail[day]
+        try:
+            changed = float(previous_close) != float(current_close)
+        except (TypeError, ValueError):
+            changed = str(previous_close) != str(current_close)
+        if changed:
+            rows.append(
+                {
+                    "date": day,
+                    "previous_close": previous_close,
+                    "current_close": current_close,
+                }
+            )
+    return rows

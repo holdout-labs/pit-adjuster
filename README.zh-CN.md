@@ -28,7 +28,7 @@ Windows / Linux / macOS。
 ![adjustment chain](https://img.shields.io/badge/deps-0-brightgreen)
 ![python](https://img.shields.io/badge/python-3.11%2B-blue)
 
-**状态：** v0.1.4 alpha，已发布到 PyPI。复权计算逻辑已在生产研究管线中
+**状态：** v0.1.5 alpha，已发布到 PyPI。复权计算逻辑已在生产研究管线中
 经过实战检验，但这个独立包尚属全新：在 v1.0 之前，CLI 和 schema 预计
 会有所调整。
 
@@ -96,12 +96,19 @@ python examples/demo.py
 # real-world case: a vendor forward (qfq) chain that drifts on
 # corporate-action-dense codes — clean / broken / missing-event verdicts
 python examples/case_forward_drift.py
+
+# real-world case: silent history rewrites between runs (caught once, then
+# quiet; legitimate ex-date re-anchors are exempt) — six-run replay
+python examples/case_history_rewrite.py
 ```
 
 实战案例文档：
 [docs/case-study-vendor-forward-drift.md](docs/case-study-vendor-forward-drift.md)
 ——供应商前复权链在公司行为密集代码上漂移（无公司行为的日子出现 ±0.3~2%
-虚假日收益），由 `padj forward-check` 判定并从公司行为链确定性重建。
+虚假日收益），由 `padj forward-check` 判定并从公司行为链确定性重建；
+[docs/case-study-cross-run-history-rewrite.md](docs/case-study-cross-run-history-rewrite.md)
+——运行间静默改写历史（最新除权日之后的段落无新事件却变值），由有状态的
+`padj watch` 每次只报一次，合法的除权重锚豁免。
 
 重建你自己的历史数据：
 
@@ -117,6 +124,10 @@ padj drift-check --bars hfq.json --actions actions.json \
 # 校验供应商前复权序列与公司行为档案的一致性：
 padj forward-check --raw raw_closes.json --forward vendor_qfq.json \
   --actions actions.json
+
+# 运行跨 run 历史重写看门狗（状态存于 --state-dir）：
+padj watch --bars vendor_600000.json --actions actions.json \
+  --as-of 2026-08-11 --state-dir ./watch-state --code 600000
 ```
 
 `padj rebuild` 是主力命令：它先把供应商的 qfq 复权链反转回原始价格，
@@ -132,6 +143,7 @@ padj forward-check --raw raw_closes.json --forward vendor_qfq.json \
 | `invert-check` | 除权除息日连续性健全性检查：是否满足 `raw_{ex-1} × factor_e ≥ raw_ex`？仅供参考——真实的除权除息日会包含隔夜收益，因此违规可能是误报 |
 | `drift-check` | **静态前复权检测。** 将反转后的原始收盘价与实时原始收盘价对比；超出容差的分歧具有权威性——说明供应商的复权链已不再与档案一致 |
 | `forward-check` | **供应商前复权链校验。** 用原始收盘价 × 公司行为档案隐含的确定性日收益对账供应商前复权（qfq）序列。无公司行为的日子出现偏差即属 unexplained（无法解释）；超过 `--unexplained-limit` 条 ⇒ `broken`（供应商前复权链漂移——不可信任该序列）。档案*漏记*了供应商已应用的事件时，会以单个 unexplained 跳变呈现（`suspicious`）。只读；`suspicious`/`broken` 时非零退出 |
+| `watch` | **跨 run 历史重写检测（有状态）。** 把尾部 vendor 收盘价快照写入 `<state-dir>/watch_state.json`；某日期收盘价相比上一轮变了、且落在最新档案除权日**之后**（无新事件可解释）⇒ 历史被静默改写 → FIRED（退出码 1）。除权日之前的变动豁免（新除权合法整体重锚前史——该段由 `drift-check` 覆盖）。增量语义：改写值持续不变时下一轮不再重复告警 |
 | `snapshot-equivalence` | 在容差范围内逐日比较两次重建的输出（例如新旧管线版本）——即"有没有变化？"的门槛检查 |
 | `version` | 打印版本号 |
 
@@ -188,6 +200,8 @@ hfq 与 qfq 会得到完全一致的复权*收益率*，同时 hfq 额外保证�
   这就是"静态前复权检测器"——如果供应商调换复权口径，它会触发告警）
 - `forward-check`——供应商前复权序列对比原始 × 公司行为档案日收益（捕捉
   供应商前复权链在公司行为密集代码上的漂移，以及档案漏记的事件）
+- `watch`——最新除权日之后段落上的跨 run 改写检测（有状态、增量：每次
+  真实历史变化只报一次）
 - `snapshot-equivalence`——两次重建的前后等价性，是管线迁移的可复现性
   门槛
 

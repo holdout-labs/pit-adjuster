@@ -7,6 +7,10 @@
 
 > Featured in [awesome-quant](https://github.com/wilsonfreitas/awesome-quant) — the curated list of quant libraries (Market Data & Data Sources section).
 
+> Part of [Holdout](https://github.com/holdout-labs): open-source infrastructure for AI-assisted quantitative research. This tool owns the point-in-time price-meaning layer before an agent or researcher moves a claim forward.
+
+> 属于 Holdout：AI 辅助量化投研的开源基础设施。本工具负责时点价格口径层，先确认价格含义没有漂移，再让 agent 或研究者继续推进结论。
+
 ## 中文说明
 
 `pit-adjuster` 面向 A 股等股票市场的历史行情复权和公司行为数据处理。
